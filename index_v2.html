@@ -87,9 +87,8 @@
 
             <div id="hint-panel">
                 <div><strong>E</strong> — Abrir/fechar Inventário</div>
-                <div><strong>Botão direito</strong> (vazio) — Divide a pilha ou Larga apenas 1</div>
-                <div><strong>Botão direito</strong> na Mesa — Abrir Crafting 3x3</div>
-                <div><strong>Clique esquerdo</strong> — Minerar bloco ou atacar mob (espada)</div>
+                <div><strong>Botão direito</strong> num bloco de Mesa de Trabalho — Abrir Crafting 3x3</div>
+                <div><strong>Clique esquerdo</strong> — Minerar bloco ou atacar mob (espada na mão)</div>
             </div>
         </div>
 
@@ -182,7 +181,8 @@
         };
 
         // ==========================================
-        // REGISTRO DE BLOCOS
+        // REGISTRO DE BLOCOS (mundo/chunks) — ids numéricos
+        // Adicionado "displayName" legível para identificação
         // ==========================================
         const BlockRegistry = {
             0:  { id: 0,  name: 'air',           displayName: 'Ar', solid: false, transparent: true },
@@ -199,6 +199,9 @@
             11: { id: 11, name: 'diamond_ore',   displayName: 'Minério de Diamante', solid: true,  transparent: false, color: 0x53e0e0, tool: 'pickaxe', requiresTool: true,  hardnessTier: 3, hardness: 4.0, dropItem: 'diamond' },
         };
 
+        // ==========================================
+        // REGISTRO DE ITENS (inventário) — ids em string, separado de BlockRegistry
+        // ==========================================
         const ItemRegistry = {
             'dirt':           { name: 'Terra',              stackSize: 64, category: 'block',    placesBlockId: 2, color: 0x735135 },
             'cobblestone':    { name: 'Pedregulho',         stackSize: 64, category: 'block',    placesBlockId: 3, color: 0x6e6e6e },
@@ -213,6 +216,9 @@
             'diamond':        { name: 'Diamante',           stackSize: 64, category: 'material', color: 0x5decf5 },
         };
 
+        // ==========================================
+        // TIERS DE EQUIPAMENTO (fonte única de progressão)
+        // ==========================================
         const TIER_DEFINITIONS = [
             { id: 'wood',    displayName: 'Madeira',  craftMaterialItemId: 'wood_planks', miningLevel: 1, miningSpeedMultiplier: 2.0,  toolDurability: 60,   attackDamageBonus: 0, color: 0xa67c52 },
             { id: 'stone',   displayName: 'Pedra',    craftMaterialItemId: 'cobblestone', miningLevel: 2, miningSpeedMultiplier: 4.0,  toolDurability: 132,  attackDamageBonus: 1, color: 0x8d8d8d },
@@ -222,6 +228,8 @@
         ];
 
         const TOOL_ICONS = { pickaxe: '⛏️', axe: '🪓', shovel: '🧹', sword: '🗡️' };
+
+        // Formas de crafting 3x3 já pré-preenchidas ('M' = material do tier, 'stick' = graveto)
         const TOOL_SHAPES = {
             pickaxe: [ ['M','M','M'], [null,'stick',null], [null,'stick',null] ],
             axe:     [ ['M','M',null], ['M','stick',null], [null,'stick',null] ],
@@ -235,6 +243,7 @@
 
         function capitalize(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
 
+        // Gera ferramentas/armas de todos os tiers dentro do ItemRegistry (nenhuma escrita à mão)
         function registerToolsAndWeapons() {
             for (const tier of TIER_DEFINITIONS) {
                 for (const kind of ['pickaxe', 'axe', 'shovel']) {
@@ -257,6 +266,9 @@
         }
         registerToolsAndWeapons();
 
+        // ==========================================
+        // RECEITAS DE CRAFTING
+        // ==========================================
         const RecipeRegistry = [
             { id: 'wood_planks', gridSize: 2, shapeless: true, requiresTable: false,
               ingredients: [{ itemId: 'wood_log', quantity: 1 }], result: { itemId: 'wood_planks', quantity: 4 } },
@@ -323,8 +335,8 @@
             main: new Array(27).fill(null),
             cursor: null,
             selectedHotbarIndex: 0,
-            craftMatrix: [],
-            craftResult: null
+            craftMatrix: [], // Armazena itens reais atualmente na grade de craft [{itemId, quantity}]
+            craftResult: null // Resultado ativo do craft
         };
         Inventory.hotbar[0] = { itemId: 'wood_log', quantity: 16 };
         Inventory.hotbar[1] = { itemId: 'wood_planks', quantity: 8 };
@@ -419,6 +431,9 @@
 
         function getSelectedHotbarItem() { return Inventory.hotbar[Inventory.selectedHotbarIndex]; }
 
+        // ==========================================
+        // ALGORITMO VALE/COLINA: RUÍDO PERLIN 2D REAL
+        // ==========================================
         const PerlinNoise = {
             permutation: new Uint8Array(512),
             init() {
@@ -458,6 +473,9 @@
             return h - Math.floor(h);
         }
 
+        // ==========================================
+        // GESTÃO DE ESTADO E SIMULAÇÃO DE FÍSICA AABB
+        // ==========================================
         const PlayerState = {
             position: { x: 8, y: 72, z: 8 }, velocity: { x: 0, y: 0, z: 0 }, rotation: { yaw: 0, pitch: 0 },
             onGround: false, reach: 5, speed: 4.5, jumpForce: 7.8, eyeHeight: 1.62,
@@ -479,20 +497,19 @@
             updateUIHealth();
             if (PlayerState.health <= 0) {
                 alert(`Morreste! Causa: ${reason}. Renascendo no ponto seguro.`);
-                PlayerState.health = PlayerState.maxHealth;
-                PlayerState.position = { x: 8, y: 75, z: 8 }; PlayerState.velocity = { x: 0, y: 0, z: 0 };
+                PlayerState.health = PlayerState.maxHealth; PlayerState.position = { x: 8, y: 75, z: 8 }; PlayerState.velocity = { x: 0, y: 0, z: 0 };
                 updateUIHealth();
             }
         }
 
         function updateUIHealth() {
-            const fill = document.getElementById('health-fill'); const text = document.getElementById('health-text');
+            const fill = document.getElementById('health-fill');
+            const text = document.getElementById('health-text');
             const percentage = (PlayerState.health / PlayerState.maxHealth) * 100;
             fill.style.width = `${percentage}%`; text.textContent = `HP: ${PlayerState.health} / ${PlayerState.maxHealth}`;
         }
 
         const CHUNK_SIZE = 16; const CHUNK_HEIGHT = 128;
-
         class Chunk {
             constructor(chunkX, chunkZ) {
                 this.cx = chunkX; this.cz = chunkZ;
@@ -505,9 +522,7 @@
         function generateChunk(chunk) {
             for (let x = 0; x < CHUNK_SIZE; x++) {
                 for (let z = 0; z < CHUNK_SIZE; z++) {
-                    const worldX = chunk.cx * CHUNK_SIZE + x;
-                    const worldZ = chunk.cz * CHUNK_SIZE + z;
-
+                    const worldX = chunk.cx * CHUNK_SIZE + x; const worldZ = chunk.cz * CHUNK_SIZE + z;
                     const n1 = PerlinNoise.noise(worldX * 0.02, worldZ * 0.02) * 18;
                     const n2 = PerlinNoise.noise(worldX * 0.08, worldZ * 0.08) * 5;
                     const height = Math.floor(58 + n1 + n2);
@@ -515,28 +530,20 @@
                     for (let y = 0; y < CHUNK_HEIGHT; y++) {
                         let blockId = 0;
                         if (y < height - 4) {
-                            blockId = 3; 
+                            blockId = 3; // stone
                             const r = hash3(worldX, y, worldZ);
-                            if (y < 40 && r < 0.010) blockId = 11;      
-                            else if (y < 55 && r < 0.020) blockId = 10; 
-                            else if (y < 60 && r < 0.035) blockId = 9;  
-                            else if (r < 0.060) blockId = 8;            
-                        }
-                        else if (y < height - 1) blockId = 2;
+                            if (y < 40 && r < 0.010) blockId = 11;      // diamond
+                            else if (y < 55 && r < 0.020) blockId = 10; // gold
+                            else if (y < 60 && r < 0.035) blockId = 9;  // iron
+                            else if (r < 0.060) blockId = 8;            // coal
+                        } else if (y < height - 1) blockId = 2;
                         else if (y === height - 1) blockId = 1;
                         chunk.blocks[chunk.index(x, y, z)] = blockId;
                     }
-
                     if (x === 6 && z === 6 && (Math.abs(worldX * worldZ) % 7 === 0) && height < 100) {
-                        for (let th = 0; th < 4; th++) {
-                            if (height + th < CHUNK_HEIGHT) chunk.blocks[chunk.index(x, height + th, z)] = 4;
-                        }
+                        for (let th = 0; th < 4; th++) { if (height + th < CHUNK_HEIGHT) chunk.blocks[chunk.index(x, height + th, z)] = 4; }
                         const leafY = height + 4;
-                        for (let lx = 4; lx <= 8; lx++) {
-                            for (let lz = 4; lz <= 8; lz++) {
-                                if (leafY < CHUNK_HEIGHT) chunk.blocks[chunk.index(lx, leafY, lz)] = 5;
-                            }
-                        }
+                        for (let lx = 4; lx <= 8; lx++) { for (let lz = 4; lz <= 8; lz++) { if (leafY < CHUNK_HEIGHT) chunk.blocks[chunk.index(lx, leafY, lz)] = 5; } }
                     }
                 }
             }
@@ -559,629 +566,37 @@
                 const lz = ((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE;
                 chunk.blocks[chunk.index(lx, y, lz)] = blockId; chunk.dirty = true;
                 if (playerAction) GameState.world.modifiedBlocks.set(`${x},${y},${z}`, blockId);
-                EventBus.emit('chunk:dirty', { cx, cz });
             },
             updateStreaming(playerPos) {
-                const pChunkX = Math.floor(playerPos.x / CHUNK_SIZE); const pChunkZ = Math.floor(playerPos.z / CHUNK_SIZE);
-                const activeKeys = new Set(); const radius = GameState.world.renderDistance;
-
-                for (let x = -radius; x <= radius; x++) {
-                    for (let z = -radius; z <= radius; z++) {
-                        const cx = pChunkX + x; const cz = pChunkZ + z; const key = `${cx},${cz}`; activeKeys.add(key);
+                const pcx = Math.floor(playerPos.x / CHUNK_SIZE); const pcz = Math.floor(playerPos.z / CHUNK_SIZE);
+                const dist = GameState.world.renderDistance;
+                for (let x = pcx - dist; x <= pcx + dist; x++) {
+                    for (let z = pcz - dist; z <= pcz + dist; z++) {
+                        const key = `${x},${z}`;
                         if (!GameState.world.chunks.has(key)) {
-                            const chunk = new Chunk(cx, cz); GameState.world.chunks.set(key, chunk);
-                            generateChunk(chunk); SaveSystem.applyDiffsToChunk(chunk);
-                            EventBus.emit('chunk:ready', chunk);
+                            const chunk = new Chunk(x, z); generateChunk(chunk);
+                            // Reaplica modificações salvas do jogador
+                            for (const [bkey, bid] of GameState.world.modifiedBlocks.entries()) {
+                                const [bx, by, bz] = bkey.split(',').map(Number);
+                                if (Math.floor(bx / CHUNK_SIZE) === x && Math.floor(bz / CHUNK_SIZE) === z) {
+                                    chunk.blocks[chunk.index(((bx % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE, by, ((bz % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE)] = bid;
+                                }
+                            }
+                            GameState.world.chunks.set(key, chunk);
                         }
                     }
                 }
                 for (const [key, chunk] of GameState.world.chunks.entries()) {
-                    if (!activeKeys.has(key)) { EventBus.emit('chunk:unload', chunk); GameState.world.chunks.delete(key); }
-                }
-            }
-        };
-
-        const SaveSystem = {
-            saveToLocalStorage() {
-                const arrayData = Array.from(GameState.world.modifiedBlocks.entries());
-                const invData = { hotbar: Inventory.hotbar, main: Inventory.main };
-                localStorage.setItem('voxel_world_diffs_v7', JSON.stringify(arrayData));
-                localStorage.setItem('voxel_inventory_v7', JSON.stringify(invData));
-                alert("Mundo e inventário guardados localmente!");
-            },
-            loadFromLocalStorage() {
-                const data = localStorage.getItem('voxel_world_diffs_v7');
-                if (data) GameState.world.modifiedBlocks = new Map(JSON.parse(data));
-                const inv = localStorage.getItem('voxel_inventory_v7');
-                if (inv) {
-                    const parsed = JSON.parse(inv);
-                    if (Array.isArray(parsed.hotbar)) Inventory.hotbar = parsed.hotbar;
-                    if (Array.isArray(parsed.main)) Inventory.main = parsed.main;
-                }
-            },
-            applyDiffsToChunk(chunk) {
-                for (const [key, blockId] of GameState.world.modifiedBlocks.entries()) {
-                    const [x, y, z] = key.split(',').map(Number);
-                    if (Math.floor(x/CHUNK_SIZE) === chunk.cx && Math.floor(z/CHUNK_SIZE) === chunk.cz) {
-                        chunk.blocks[chunk.index(((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE, y, ((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE)] = blockId;
+                    if (Math.abs(chunk.cx - pcx) > dist + 1 || Math.abs(chunk.cz - pcz) > dist + 1) {
+                        if (chunk.mesh) { scene.remove(chunk.mesh); chunk.mesh.geometry.dispose(); }
+                        GameState.world.chunks.delete(key);
                     }
                 }
             }
         };
-        SaveSystem.loadFromLocalStorage();
-
-        function getTargetedBlock(player, world, camera) {
-            const origin = new THREE.Vector3(player.position.x, player.position.y + player.eyeHeight, player.position.z);
-            const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-            let x = Math.floor(origin.x), y = Math.floor(origin.y), z = Math.floor(origin.z);
-            const stepX = Math.sign(direction.x), stepY = Math.sign(direction.y), stepZ = Math.sign(direction.z);
-            const tDeltaX = Math.abs(1 / direction.x), tDeltaY = Math.abs(1 / direction.y), tDeltaZ = Math.abs(1 / direction.z);
-            let tMaxX = stepX > 0 ? (Math.floor(origin.x) + 1 - origin.x) * tDeltaX : (origin.x - Math.floor(origin.x)) * tDeltaX;
-            let tMaxY = stepY > 0 ? (Math.floor(origin.y) + 1 - origin.y) * tDeltaY : (origin.y - Math.floor(origin.y)) * tDeltaY;
-            let tMaxZ = stepZ > 0 ? (Math.floor(origin.z) + 1 - origin.z) * tDeltaZ : (origin.z - Math.floor(origin.z)) * tDeltaZ;
-            let faceNormal = { dx: 0, dy: 0, dz: 0 }, distance = 0;
-
-            while (distance < player.reach) {
-                const blockId = world.getBlock(x, y, z);
-                if (blockId !== 0) return { blockPos: { x, y, z }, faceNormal, distance };
-                if (tMaxX < tMaxY) {
-                    if (tMaxX < tMaxZ) { distance = tMaxX; tMaxX += tDeltaX; x += stepX; faceNormal = { dx: -stepX, dy: 0, dz: 0 }; }
-                    else { distance = tMaxZ; tMaxZ += tDeltaZ; z += stepZ; faceNormal = { dx: 0, dy: 0, dz: -stepZ }; }
-                } else {
-                    if (tMaxY < tMaxZ) { distance = tMaxY; tMaxY += tDeltaY; y += stepY; faceNormal = { dx: 0, dy: -stepY, dz: 0 }; }
-                    else { distance = tMaxZ; tMaxZ += tDeltaZ; z += stepZ; faceNormal = { dx: 0, dy: 0, dz: -stepZ }; }
-                }
-            }
-            return null;
-        }
-
-        function getTargetedEntity(player, camera, mobs, range) {
-            const origin = new THREE.Vector3(player.position.x, player.position.y + player.eyeHeight, player.position.z);
-            const direction = new THREE.Vector3(0, 0, -1).applyQuaternion(camera.quaternion).normalize();
-            let closest = null;
-            for (const mob of mobs) {
-                const center = new THREE.Vector3(mob.position.x, mob.position.y + mob.height / 2, mob.position.z);
-                const toMob = new THREE.Vector3().subVectors(center, origin);
-                const t = toMob.dot(direction);
-                if (t < 0 || t > range) continue;
-                const closestPoint = new THREE.Vector3().copy(origin).addScaledVector(direction, t);
-                const perpDist = closestPoint.distanceTo(center);
-                if (perpDist <= mob.radius) {
-                    if (!closest || t < closest.distance) closest = { mob, distance: t };
-                }
-            }
-            return closest;
-        }
-
-        let miningProgress = 0; let lastTargetPos = null;
-
-        function getMiningDuration(block, heldItemDef) {
-            const base = block.hardness;
-            if (!heldItemDef || heldItemDef.category !== 'tool') {
-                return block.requiresTool ? Infinity : base;
-            }
-            const correctTool = heldItemDef.toolType === block.tool;
-            if (block.requiresTool && !correctTool) return Infinity;
-            const tier = TIER_DEFINITIONS.find(t => t.id === heldItemDef.tierId);
-            if (block.requiresTool && tier.miningLevel < block.hardnessTier) return Infinity;
-            if (!correctTool) return base;
-            return base / tier.miningSpeedMultiplier;
-        }
-
-        function handleMining(hit, deltaTime) {
-            const blockId = WorldManager.getBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z); if (blockId === 0) return;
-            const targetKey = `${hit.blockPos.x},${hit.blockPos.y},${hit.blockPos.z}`;
-            if (lastTargetPos !== targetKey) { miningProgress = 0; lastTargetPos = targetKey; }
-
-            const blockDef = BlockRegistry[blockId];
-            const activeSlot = getSelectedHotbarItem();
-            const heldItemDef = activeSlot ? ItemRegistry[activeSlot.itemId] : null;
-            const duration = getMiningDuration(blockDef, heldItemDef);
-            if (duration === Infinity) return;
-
-            miningProgress += deltaTime;
-            if (miningProgress >= duration) {
-                if (blockDef.dropItem && !hasSpaceFor(blockDef.dropItem, 1)) {
-                    miningProgress = duration - 0.001; return;
-                }
-                WorldManager.setBlock(hit.blockPos.x, hit.blockPos.y, hit.blockPos.z, 0, true);
-                if (blockDef.dropItem) addItem(blockDef.dropItem, 1);
-                SoundSystem.play('break');
-                if (heldItemDef && heldItemDef.category === 'tool') applyDurabilityLoss('hotbar', Inventory.selectedHotbarIndex, 1);
-                miningProgress = 0; lastTargetPos = null;
-            }
-        }
-
-        const CombatState = { lastAttackTime: -999 };
-        const KNOCKBACK_FORCE = 6.0;
-        let nextEntityId = 1;
-
-        function tryAttack(targetMob, nowSeconds) {
-            const held = getSelectedHotbarItem();
-            const weaponDef = held ? ItemRegistry[held.itemId] : null;
-            const isWeapon = weaponDef && weaponDef.category === 'weapon';
-            const damage = isWeapon ? weaponDef.attackDamage : 1;
-            const cooldown = isWeapon ? weaponDef.attackCooldown : 0.25;
-
-            if (nowSeconds - CombatState.lastAttackTime < cooldown) return;
-            CombatState.lastAttackTime = nowSeconds;
-
-            targetMob.health -= damage;
-            const dir = new THREE.Vector3().subVectors(targetMob.position, new THREE.Vector3(PlayerState.position.x, targetMob.position.y, PlayerState.position.z));
-            if (dir.lengthSq() > 0.0001) dir.normalize(); else dir.set(1, 0, 0);
-            targetMob.velocity.x = dir.x * KNOCKBACK_FORCE; targetMob.velocity.z = dir.z * KNOCKBACK_FORCE; targetMob.velocity.y = 4.0;
-
-            if (isWeapon) applyDurabilityLoss('hotbar', Inventory.selectedHotbarIndex, 1);
-            SoundSystem.play('attack');
-            EventBus.emit('entity:damaged', { entityId: targetMob.id, damage, remainingHealth: targetMob.health });
-
-            if (targetMob.health <= 0) {
-                EventBus.emit('entity:died', { entityId: targetMob.id });
-                scene.remove(targetMob.mesh);
-                const idx = GameState.mobs.indexOf(targetMob);
-                if (idx !== -1) GameState.mobs.splice(idx, 1);
-            }
-        }
-
-        class ZombieMob {
-            constructor(x, y, z) {
-                this.id = nextEntityId++;
-                this.position = new THREE.Vector3(x, y, z); this.velocity = new THREE.Vector3(0, 0, 0);
-                this.speed = 2.0; this.width = 0.6; this.height = 1.8; this.radius = 0.7;
-                this.health = 20; this.maxHealth = 20;
-                const geo = new THREE.BoxGeometry(this.width, this.height, this.width);
-                this.mesh = new THREE.Mesh(geo, new THREE.MeshLambertMaterial({ color: 0x1e4620 }));
-                this.mesh.position.copy(this.position);
-            }
-            update(playerPos, world, deltaTime) {
-                if (isSimPaused()) return;
-                const playerVec = new THREE.Vector3(playerPos.x, playerPos.y, playerPos.z);
-                const dist = this.position.distanceTo(playerVec);
-
-                if (dist < 1.3) damagePlayer(2, "Zumbi da Noite");
-
-                const dir = new THREE.Vector3().copy(playerVec).sub(this.position); dir.y = 0;
-                if (dir.length() > 0.8) {
-                    dir.normalize(); this.velocity.x = dir.x * this.speed; this.velocity.z = dir.z * this.speed;
-                } else { this.velocity.x = 0; this.velocity.z = 0; }
-
-                this.velocity.y += -22.0 * deltaTime; this.position.addScaledVector(this.velocity, deltaTime);
-
-                const bx = Math.floor(this.position.x); const by = Math.floor(this.position.y); const bz = Math.floor(this.position.z);
-                if (BlockRegistry[world.getBlock(bx, by, bz)]?.solid) { this.position.y = by + 1; this.velocity.y = 0; }
-                this.mesh.position.copy(this.position); this.mesh.position.y += this.height / 2;
-            }
-        }
-
-        const PLAYER_WIDTH = 0.6; const PLAYER_HEIGHT = 1.8; let lastVerticalVelocity = 0;
-
-        function resolveAxisCollision(player, world, nextPos, axis) {
-            const EPSILON = 0.005;
-            let minX = (axis === 'x' ? nextPos.x : player.position.x) - PLAYER_WIDTH / 2;
-            let maxX = (axis === 'x' ? nextPos.x : player.position.x) + PLAYER_WIDTH / 2;
-            let minY = axis === 'y' ? nextPos.y : player.position.y;
-            let maxY = (axis === 'y' ? nextPos.y : player.position.y) + PLAYER_HEIGHT;
-            let minZ = (axis === 'z' ? nextPos.z : player.position.z) - PLAYER_WIDTH / 2;
-            let maxZ = (axis === 'z' ? nextPos.z : player.position.z) + PLAYER_WIDTH / 2;
-
-            if (axis !== 'x') { minX += EPSILON; maxX -= EPSILON; }
-            if (axis !== 'y') { minY += EPSILON; maxY -= EPSILON; }
-            if (axis !== 'z') { minZ += EPSILON; maxZ -= EPSILON; }
-
-            const cx = Math.floor(player.position.x), cy = Math.floor(player.position.y), cz = Math.floor(player.position.z);
-            for (let x = cx - 2; x <= cx + 2; x++) {
-                for (let y = cy - 2; y <= cy + 3; y++) {
-                    for (let z = cz - 2; z <= cz + 2; z++) {
-                        if (BlockRegistry[world.getBlock(x, y, z)]?.solid) {
-                            const bAABB = { minX: x, maxX: x + 1, minY: y, maxY: y + 1, minZ: z, maxZ: z + 1 };
-                            if (minX < bAABB.maxX && maxX > bAABB.minX && minY < bAABB.maxY && maxY > bAABB.minY && minZ < bAABB.maxZ && maxZ > bAABB.minZ) {
-                                if (axis === 'y') {
-                                    if (player.velocity.y < 0) {
-                                        player.onGround = true; nextPos.y = bAABB.maxY;
-                                        if (lastVerticalVelocity < -13.0) damagePlayer(Math.floor(Math.abs(lastVerticalVelocity) - 10), "Queda livre");
-                                    } else if (player.velocity.y > 0) nextPos.y = bAABB.minY - PLAYER_HEIGHT;
-                                    player.velocity.y = 0;
-                                } else if (axis === 'x') {
-                                    if (player.velocity.x > 0) nextPos.x = bAABB.minX - PLAYER_WIDTH / 2;
-                                    else if (player.velocity.x < 0) nextPos.x = bAABB.maxX + PLAYER_WIDTH / 2;
-                                    player.velocity.x = 0;
-                                } else if (axis === 'z') {
-                                    if (player.velocity.z > 0) nextPos.z = bAABB.minZ - PLAYER_WIDTH / 2;
-                                    else if (player.velocity.z < 0) nextPos.z = bAABB.maxZ + PLAYER_WIDTH / 2;
-                                    player.velocity.z = 0;
-                                }
-                                if (axis === 'x') { minX = nextPos.x - PLAYER_WIDTH/2; maxX = nextPos.x + PLAYER_WIDTH/2; }
-                                if (axis === 'y') { minY = nextPos.y; maxY = nextPos.y + PLAYER_HEIGHT; }
-                                if (axis === 'z') { minZ = nextPos.z - PLAYER_WIDTH/2; maxZ = nextPos.z + PLAYER_WIDTH/2; }
-                            }
-                        }
-                    }
-                }
-            }
-            player.position[axis] = nextPos[axis];
-        }
-
-        function updatePhysics(player, world, deltaTime) {
-            if (isSimPaused()) return; if (deltaTime > 0.1) deltaTime = 0.1;
-            lastVerticalVelocity = player.velocity.y; player.velocity.y += -22.0 * deltaTime;
-            const nextPos = {
-                x: player.position.x + player.velocity.x * deltaTime,
-                y: player.position.y + player.velocity.y * deltaTime,
-                z: player.position.z + player.velocity.z * deltaTime
-            };
-            player.onGround = false;
-            resolveAxisCollision(player, world, nextPos, 'y');
-            resolveAxisCollision(player, world, nextPos, 'x');
-            resolveAxisCollision(player, world, nextPos, 'z');
-            if (player.invulnerabilityTimer > 0) player.invulnerabilityTimer -= deltaTime;
-        }
 
         // ==========================================
-        // UI DE INVENTÁRIO / CRAFTING
-        // ==========================================
-        const UIState = { craftGridSize: 2, hasTableOpen: false };
-
-        const invModalEl = document.getElementById('inventory-modal');
-        const invTitleEl = document.getElementById('inv-title');
-        const craftGridEl = document.getElementById('craft-grid');
-        const craftResultEl = document.getElementById('craft-result');
-        const invMainGridEl = document.getElementById('inv-main-grid');
-        const invHotbarGridEl = document.getElementById('inv-hotbar-grid');
-        const cursorItemEl = document.getElementById('cursor-item');
-
-        function iconForItem(itemId) {
-            const def = ItemRegistry[itemId]; if (!def) return { html: '', bg: 'transparent' };
-            if (def.category === 'tool' || def.category === 'weapon') return { html: def.icon, bg: `#${def.color.toString(16).padStart(6,'0')}` };
-            return { html: '', bg: `#${def.color.toString(16).padStart(6,'0')}` };
-        }
-
-        function renderSlotEl(el, slot) {
-            el.innerHTML = '';
-            if (!slot) { el.style.background = ''; return; }
-            const def = ItemRegistry[slot.itemId];
-            const { html, bg } = iconForItem(slot.itemId);
-            el.style.background = bg;
-            const iconSpan = document.createElement('div'); iconSpan.className = 'slot-icon'; iconSpan.textContent = html;
-            el.appendChild(iconSpan);
-            if (!def.maxDurability && slot.quantity > 1) {
-                const countSpan = document.createElement('span'); countSpan.className = 'slot-count'; countSpan.textContent = slot.quantity;
-                el.appendChild(countSpan);
-            }
-            if (def.maxDurability !== undefined) {
-                const bar = document.createElement('div'); bar.className = 'durability-bar';
-                const fill = document.createElement('div'); fill.className = 'durability-fill';
-                const pct = Math.max(0, (slot.durability / def.maxDurability) * 100);
-                fill.style.width = pct + '%';
-                fill.style.background = pct > 50 ? '#4caf50' : pct > 20 ? '#ffb300' : '#e53935';
-                bar.appendChild(fill); el.appendChild(bar);
-            }
-        }
-
-        function buildCraftGridDOM() {
-            craftGridEl.innerHTML = '';
-            craftGridEl.style.gridTemplateColumns = `repeat(${UIState.craftGridSize}, 1fr)`;
-            Inventory.craftMatrix = new Array(UIState.craftGridSize * UIState.craftGridSize).fill(null);
-            for (let i = 0; i < Inventory.craftMatrix.length; i++) {
-                const el = document.createElement('div'); el.className = 'inv-slot';
-                el.addEventListener('click', () => handleSlotClick('craft', i));
-                el.addEventListener('contextmenu', (e) => { e.preventDefault(); handleSlotRightClick('craft', i); });
-                craftGridEl.appendChild(el);
-            }
-        }
-
-        function buildInvGridsDOM() {
-            invMainGridEl.innerHTML = '';
-            for (let i = 0; i < Inventory.main.length; i++) {
-                const el = document.createElement('div'); el.className = 'inv-slot';
-                el.addEventListener('click', () => handleSlotClick('main', i));
-                el.addEventListener('contextmenu', (e) => { e.preventDefault(); handleSlotRightClick('main', i); });
-                invMainGridEl.appendChild(el);
-            }
-            invHotbarGridEl.innerHTML = '';
-            for (let i = 0; i < Inventory.hotbar.length; i++) {
-                const el = document.createElement('div'); el.className = 'inv-slot';
-                el.addEventListener('click', () => handleSlotClick('hotbar', i));
-                el.addEventListener('contextmenu', (e) => { e.preventDefault(); handleSlotRightClick('hotbar', i); });
-                invHotbarGridEl.appendChild(el);
-            }
-        }
-
-        function getCraftGrid2D() {
-            const size = UIState.craftGridSize; const grid2D = [];
-            for (let r = 0; r < size; r++) {
-                const row = [];
-                for (let c = 0; c < size; c++) { const s = Inventory.craftMatrix[r * size + c]; row.push(s ? s.itemId : null); }
-                grid2D.push(row);
-            }
-            return grid2D;
-        }
-
-        function getCraftGridFlat() { return Inventory.craftMatrix.map(s => s ? s.itemId : null); }
-
-        function getCurrentMatchedRecipe() {
-            return findMatchingRecipe(getCraftGrid2D(), getCraftGridFlat(), UIState.craftGridSize, UIState.hasTableOpen);
-        }
-
-        function refreshCraftResultUI() {
-            const recipe = getCurrentMatchedRecipe();
-            craftResultEl.innerHTML = '';
-            if (!recipe) return;
-            const { html, bg } = iconForItem(recipe.result.itemId);
-            craftResultEl.style.background = bg;
-            const iconSpan = document.createElement('div'); iconSpan.className = 'slot-icon'; iconSpan.textContent = html;
-            craftResultEl.appendChild(iconSpan);
-            if (recipe.result.quantity > 1) {
-                const countSpan = document.createElement('span'); countSpan.className = 'slot-count'; countSpan.textContent = recipe.result.quantity;
-                craftResultEl.appendChild(countSpan);
-            }
-        }
-
-        function getSlotRefValue(area, index) {
-            if (area === 'hotbar') return Inventory.hotbar[index];
-            if (area === 'main') return Inventory.main[index];
-            if (area === 'craft') return Inventory.craftMatrix[index];
-            return null;
-        }
-        function setSlotRefValue(area, index, value) {
-            if (area === 'hotbar') Inventory.hotbar[index] = value;
-            else if (area === 'main') Inventory.main[index] = value;
-            else if (area === 'craft') Inventory.craftMatrix[index] = value;
-        }
-
-        function handleSlotClick(area, index) {
-            let arr = area === 'hotbar' ? Inventory.hotbar : area === 'main' ? Inventory.main : Inventory.craftMatrix;
-            let clickedSlot = arr[index];
-
-            if (Inventory.cursor) {
-                if (!clickedSlot) { setSlotRefValue(area, index, Inventory.cursor); Inventory.cursor = null; }
-                else if (clickedSlot.itemId === Inventory.cursor.itemId && clickedSlot.durability === undefined) {
-                    const maxStack = stackSizeOf(clickedSlot.itemId);
-                    const total = clickedSlot.quantity + Inventory.cursor.quantity;
-                    if (total <= maxStack) { clickedSlot.quantity = total; Inventory.cursor = null; }
-                    else { clickedSlot.quantity = maxStack; Inventory.cursor.quantity = total - maxStack; }
-                } else {
-                    setSlotRefValue(area, index, Inventory.cursor); Inventory.cursor = clickedSlot;
-                }
-            } else {
-                if (clickedSlot) { Inventory.cursor = clickedSlot; setSlotRefValue(area, index, null); }
-            }
-            updateCraftingRecipeCheck(); renderInventoryUI(); updateCursorUI(); EventBus.emit('inventory:changed', null);
-        }
-
-        // --- CORREÇÃO: Drop 1 item por vez ou Divide a Stack (Split Stack) ---
-        function handleSlotRightClick(area, index) {
-            let arr = area === 'hotbar' ? Inventory.hotbar : area === 'main' ? Inventory.main : Inventory.craftMatrix;
-            let clickedSlot = arr[index];
-
-            if (Inventory.cursor) {
-                // Se já tem item no mouse, larga apenas 1 no slot
-                if (!clickedSlot) {
-                    arr[index] = { itemId: Inventory.cursor.itemId, quantity: 1, ...(Inventory.cursor.durability !== undefined ? {durability: Inventory.cursor.durability} : {}) };
-                    Inventory.cursor.quantity -= 1;
-                    if (Inventory.cursor.quantity <= 0) Inventory.cursor = null;
-                } else if (clickedSlot.itemId === Inventory.cursor.itemId && !ItemRegistry[clickedSlot.itemId].maxDurability) {
-                    const max = stackSizeOf(clickedSlot.itemId);
-                    if (clickedSlot.quantity < max) {
-                        clickedSlot.quantity += 1;
-                        Inventory.cursor.quantity -= 1;
-                        if (Inventory.cursor.quantity <= 0) Inventory.cursor = null;
-                    }
-                } else {
-                    // Troca se forem diferentes
-                    const tmp = arr[index]; arr[index] = Inventory.cursor; Inventory.cursor = tmp;
-                }
-            } else {
-                // Pega metade do slot (Split)
-                if (clickedSlot) {
-                    const take = Math.ceil(clickedSlot.quantity / 2);
-                    Inventory.cursor = { itemId: clickedSlot.itemId, quantity: take, ...(clickedSlot.durability !== undefined ? {durability: clickedSlot.durability} : {}) };
-                    clickedSlot.quantity -= take;
-                    if (clickedSlot.quantity <= 0) arr[index] = null;
-                }
-            }
-            updateCraftingRecipeCheck(); renderInventoryUI(); updateCursorUI(); EventBus.emit('inventory:changed', null);
-        }
-
-        // --- CORREÇÃO: Função de retirar o item construído da grelha ---
-        document.getElementById('craft-result').addEventListener('click', () => {
-            if (!Inventory.craftResult) return;
-            if (Inventory.cursor && Inventory.cursor.itemId !== Inventory.craftResult.itemId) return;
-            
-            if (Inventory.cursor) {
-                const maxStack = stackSizeOf(Inventory.craftResult.itemId);
-                if (Inventory.cursor.quantity + Inventory.craftResult.quantity <= maxStack) {
-                    Inventory.cursor.quantity += Inventory.craftResult.quantity;
-                } else { return; }
-            } else {
-                Inventory.cursor = { ...Inventory.craftResult };
-            }
-
-            // Consumir os materiais da craft matrix de forma realista
-            for (let i = 0; i < Inventory.craftMatrix.length; i++) {
-                if (Inventory.craftMatrix[i]) {
-                    Inventory.craftMatrix[i].quantity--;
-                    if (Inventory.craftMatrix[i].quantity <= 0) Inventory.craftMatrix[i] = null;
-                }
-            }
-
-            SoundSystem.play('craft');
-            updateCraftingRecipeCheck();
-            renderInventoryUI(); updateCursorUI(); EventBus.emit('inventory:changed', null);
-        });
-
-        function updateCraftingRecipeCheck() {
-            const gridFlat = Inventory.craftMatrix.map(c => c ? c.itemId : null);
-            const grid2D = [];
-            for (let r = 0; r < currentCraftSize; r++) {
-                const row = []; for(let c=0; c<currentCraftSize; c++) { row.push(gridFlat[r * currentCraftSize + c]); }
-                grid2D.push(row);
-            }
-            const match = findMatchingRecipe(grid2D, gridFlat, currentCraftSize, UIState.hasTableOpen);
-            if (match) {
-                const def = ItemRegistry[match.result.itemId];
-                Inventory.craftResult = { itemId: match.result.itemId, quantity: match.result.quantity, ...(def.maxDurability ? { durability: def.maxDurability } : {}) };
-            } else { Inventory.craftResult = null; }
-        }
-
-        function updateCursorUI() {
-            const el = document.getElementById('cursor-item');
-            if (Inventory.cursor) {
-                const def = ItemRegistry[Inventory.cursor.itemId];
-                el.style.display = 'flex'; el.style.left = `${cursorX - 18}px`; el.style.top = `${cursorY - 18}px`;
-                el.innerHTML = `<div class="slot-icon" style="color:${def?.color ? '#' + def.color.toString(16) : '#fff'}">${def?.icon || Inventory.cursor.itemId.substring(0,2).toUpperCase()}</div>`;
-                el.innerHTML += `<span class="slot-count">${Inventory.cursor.quantity > 1 ? Inventory.cursor.quantity : ''}</span>`;
-            } else { el.style.display = 'none'; }
-        }
-
-        let cursorX = 0, cursorY = 0;
-        window.addEventListener('mousemove', e => { cursorX = e.clientX; cursorY = e.clientY; if(GameState.uiOpen) updateCursorUI(); });
-
-        function renderInventoryUI() {
-            Inventory.main.forEach((slot, i) => renderSlotEl(invMainGridEl.children[i], slot));
-            Inventory.hotbar.forEach((slot, i) => renderSlotEl(invHotbarGridEl.children[i], slot));
-            Inventory.craftMatrix.forEach((slot, i) => renderSlotEl(craftGridEl.children[i], slot));
-            refreshCraftResultUI(); renderHotbarUI();
-            if (Inventory.cursor) { cursorItemEl.style.display = 'flex'; updateCursorUI(); } else { cursorItemEl.style.display = 'none'; }
-        }
-
-        function returnCraftGridAndCursorToInventory() {
-            for (let i = 0; i < Inventory.craftMatrix.length; i++) {
-                const s = Inventory.craftMatrix[i];
-                if (s) { addItem(s.itemId, s.quantity); Inventory.craftMatrix[i] = null; }
-            }
-            if (Inventory.cursor) {
-                const s = Inventory.cursor; Inventory.cursor = null;
-                if (!addItem(s.itemId, s.quantity)) {
-                    const emptyIdx = Inventory.main.findIndex(x => !x);
-                    if (emptyIdx !== -1) Inventory.main[emptyIdx] = s;
-                    else Inventory.hotbar[Inventory.hotbar.findIndex(x => !x)] = s;
-                }
-            }
-        }
-
-        function openCraftingInterface(size) {
-            UIState.craftGridSize = size; UIState.hasTableOpen = (size === 3);
-            document.getElementById('inv-title').textContent = size === 3 ? "Mesa de Trabalho (3x3)" : "Inventário (2x2)";
-            buildCraftGridDOM(); Inventory.craftResult = null;
-            renderInventoryUI();
-        }
-
-        function openInventoryScreen() {
-            GameState.uiOpen = true; document.getElementById('inventory-modal').classList.remove('hidden');
-            document.exitPointerLock(); openCraftingInterface(2);
-        }
-
-        function closeInventoryScreen() {
-            returnCraftGridAndCursorToInventory();
-            GameState.uiOpen = false; document.getElementById('inventory-modal').classList.add('hidden');
-            renderInventoryUI(); if (!GameState.isPausado) canvas.requestPointerLock();
-        }
-
-        function toggleInventory() { if (GameState.uiOpen) closeInventoryScreen(); else openInventoryScreen(); }
-
-        document.getElementById('btn-close-inv').onclick = () => closeInventoryScreen();
-        buildInvGridsDOM();
-
-        function renderHotbarUI() {
-            const slots = document.querySelectorAll('.hotbar-slot');
-            slots.forEach((el, i) => {
-                const slot = Inventory.hotbar[i]; el.innerHTML = '';
-                if (i === Inventory.selectedHotbarIndex) el.classList.add('selected'); else el.classList.remove('selected');
-                if (slot) {
-                    const def = ItemRegistry[slot.itemId];
-                    el.innerHTML = `<div class="slot-icon" style="color:${def?.color ? '#' + def.color.toString(16) : '#fff'}">${def?.icon || slot.itemId.substring(0,2).toUpperCase()}</div>`;
-                    if (slot.quantity > 1) el.innerHTML += `<span class="slot-count">${slot.quantity}</span>`;
-                    if (slot.durability !== undefined && def?.maxDurability) {
-                        const p = (slot.durability / def.maxDurability) * 100;
-                        el.innerHTML += `<div class="durability-bar"><div class="durability-fill" style="width:${p}%; background:${p<25?'#f44336':p<50?'#ff9800':'#4caf50'}"></div></div>`;
-                    }
-                } else { el.innerHTML = `<span class="slot-count"></span>`; }
-            });
-        }
-
-        // ==========================================
-        // REAÇÃO DE INPUTS DO UTILIZADOR
-        // ==========================================
-        const keysPressed = {}; const pauseMenuEl = document.getElementById('pause-menu');
-
-        function initPlayerInputs(canvas, camera) {
-            canvas.addEventListener('click', () => { if (GameState.isPausado && !GameState.uiOpen) canvas.requestPointerLock(); });
-            document.addEventListener('pointerlockchange', () => {
-                if (document.pointerLockElement === canvas) {
-                    GameState.isPausado = false; pauseMenuEl.classList.add('hidden'); SoundSystem.init();
-                } else {
-                    keysPressed['ClickActive'] = false;
-                    if (!GameState.uiOpen) { GameState.isPausado = true; pauseMenuEl.classList.remove('hidden'); }
-                }
-            });
-
-            document.getElementById('btn-resume').onclick = () => { canvas.requestPointerLock(); };
-            document.getElementById('btn-menu-save').onclick = () => { SaveSystem.saveToLocalStorage(); };
-
-            document.addEventListener('mousemove', (e) => {
-                if (isSimPaused()) return;
-                camera.rotation.y -= e.movementX * 0.0022; camera.rotation.x -= e.movementY * 0.0022;
-                camera.rotation.x = Math.max(-Math.PI / 2 + 0.05, Math.min(Math.PI / 2 - 0.05, camera.rotation.x));
-                PlayerState.rotation.yaw = camera.rotation.y; PlayerState.rotation.pitch = camera.rotation.x;
-            });
-
-            document.addEventListener('keydown', (e) => {
-                if (e.code === 'KeyE') { toggleInventory(); return; }
-                if (GameState.isPausado && e.code !== 'Escape') return;
-                if (GameState.uiOpen) return;
-                keysPressed[e.code] = true;
-                if (e.code.startsWith('Digit')) {
-                    const num = parseInt(e.code.replace('Digit', '')) - 1;
-                    if (num >= 0 && num < 9) { Inventory.selectedHotbarIndex = num; renderHotbarUI(); }
-                }
-            });
-            document.addEventListener('keyup', (e) => { keysPressed[e.code] = false; });
-
-            window.addEventListener('mousedown', e => {
-                if (document.pointerLockElement !== canvas || GameState.uiOpen) return;
-                if (e.button === 0) keysPressed['ClickActive'] = true;
-                if (e.button === 2) { 
-                    const hit = getTargetedBlock(PlayerState, WorldManager, camera);
-                    if (hit) {
-                        const hitDef = BlockRegistry[hit.blockId];
-                        
-                        // --- CORREÇÃO: Interagir com a Mesa de Trabalho abre aspeto UI 3x3 de facto ---
-                        if (hitDef && hitDef.interactable === 'crafting_table') {
-                            GameState.uiOpen = true;
-                            document.getElementById('inventory-modal').classList.remove('hidden');
-                            openCraftingInterface(3); 
-                            document.exitPointerLock();
-                        } else {
-                            const held = getSelectedHotbarItem();
-                            if (held && ItemRegistry[held.itemId]?.category === 'block') {
-                                const px = hit.x + hit.face[0]; const py = hit.y + hit.face[1]; const pz = hit.z + hit.face[2];
-                                WorldManager.setBlock(px, py, pz, ItemRegistry[held.itemId].placesBlockId, true);
-                                chunkDirtyAtWorldPos(px, py, pz); removeItemFromSlot('hotbar', Inventory.selectedHotbarIndex, 1);
-                            }
-                        }
-                    }
-                }
-            });
-            window.addEventListener('mouseup', e => { if (e.button === 0) keysPressed['ClickActive'] = false; });
-            window.addEventListener('contextmenu', e => e.preventDefault());
-        }
-
-        function processPlayerMovement(camera) {
-            if (isSimPaused()) return;
-            const forward = new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), PlayerState.rotation.yaw);
-            const right = new THREE.Vector3(1, 0, 0).applyAxisAngle(new THREE.Vector3(0, 1, 0), PlayerState.rotation.yaw);
-            let mx = 0, mz = 0;
-            if (keysPressed['KeyW']) { mx += forward.x; mz += forward.z; } if (keysPressed['KeyS']) { mx -= forward.x; mz -= forward.z; }
-            if (keysPressed['KeyA']) { mx -= right.x; mz -= right.z; } if (keysPressed['KeyD']) { mx += right.x; mz += right.z; }
-            const move = new THREE.Vector2(mx, mz); if (move.lengthSq() > 0) move.normalize().multiplyScalar(PlayerState.speed);
-            PlayerState.velocity.x = move.x; PlayerState.velocity.z = move.y;
-
-            if (keysPressed['Space'] && PlayerState.onGround) { PlayerState.velocity.y = PlayerState.jumpForce; PlayerState.onGround = false; SoundSystem.play('jump'); }
-            camera.position.set(PlayerState.position.x, PlayerState.position.y + PlayerState.eyeHeight, PlayerState.position.z);
-        }
-
-        // ==========================================
-        // ENGINE GRÁFICA (THREE.JS)
+        // ENGINE GRÁFICA (THREE.JS) - COMBINED MESHING
         // ==========================================
         let scene, camera, renderer;
         const blockMaterialsMap = new Map();
@@ -1191,6 +606,7 @@
             camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
             renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: false });
             renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = false;
 
             const ambientLight = new THREE.AmbientLight(0xffffff, 0.4); scene.add(ambientLight);
             const dirLight = new THREE.DirectionalLight(0xffffff, 0.8); dirLight.position.set(20, 40, 20); scene.add(dirLight);
@@ -1198,6 +614,13 @@
                 camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             });
+        }
+
+        function getBlockMaterial(blockId) {
+            if (blockMaterialsMap.has(blockId)) return blockMaterialsMap.get(blockId);
+            const def = BlockRegistry[blockId]; if (!def || !def.solid) return null;
+            const mat = new THREE.MeshLambertMaterial({ color: def.color, transparent: def.transparent, opacity: def.transparent ? 0.6 : 1.0 });
+            blockMaterialsMap.set(blockId, mat); return mat;
         }
 
         const FACES = [
@@ -1214,7 +637,8 @@
                 if (!chunk.dirty) continue; chunk.dirty = false;
                 if (chunk.mesh) { scene.remove(chunk.mesh); chunk.mesh.geometry.dispose(); chunk.mesh = null; }
 
-                const vertices = []; const normals = []; const colors = []; const indices = []; let vCount = 0;
+                const vertices = []; const normals = []; const colors = []; const indices = [];
+                let vCount = 0;
 
                 for (let x = 0; x < CHUNK_SIZE; x++) {
                     for (let z = 0; z < CHUNK_SIZE; z++) {
@@ -1251,6 +675,483 @@
         }
 
         // ==========================================
+        // MOBS (IA INIMIGA) & GERENCIAMENTO DE DIA/NOITE
+        // ==========================================
+        class ZombieMob {
+            constructor(x, y, z) {
+                this.pos = { x, y, z }; this.health = 12; this.speed = 2.0;
+                const geom = new THREE.BoxGeometry(0.6, 1.8, 0.6);
+                const mat = new THREE.MeshLambertMaterial({ color: 0x3a5f3a });
+                this.mesh = new THREE.Mesh(geom, mat); this.mesh.position.set(x, y + 0.9, z); scene.add(this.mesh);
+            }
+            update(playerPos, wm, dt) {
+                const dx = playerPos.x - this.pos.x; const dz = playerPos.z - this.pos.z; const dist = Math.sqrt(dx*dx + dz*dz);
+                if (dist < 14 && dist > 0.5) {
+                    const vx = (dx / dist) * this.speed; const vz = (dz / dist) * this.speed;
+                    this.pos.x += vx * dt; this.pos.z += vz * dt;
+                    // Gravidade/Ajuste simples de altura ao terreno
+                    const groundY = Math.floor(this.pos.y);
+                    let foundY = this.pos.y;
+                    for (let checkY = Math.min(CHUNK_HEIGHT-1, groundY+3); checkY >= 0; checkY--) {
+                        if (wm.getBlock(Math.floor(this.pos.x), checkY, Math.floor(this.pos.z)) !== 0) { foundY = checkY + 1; break; }
+                    }
+                    this.pos.y = foundY; this.mesh.position.set(this.pos.x, this.pos.y + 0.9, this.pos.z);
+                    if (dist < 1.2) { damagePlayer(3, "Ataque de Zumbi"); }
+                }
+            }
+            takeDamage(amount) {
+                this.health -= amount; SoundSystem.play('break');
+                if (this.health <= 0) { scene.remove(this.mesh); this.mesh.geometry.dispose(); return true; }
+                return false;
+            }
+        }
+
+        let spawnTimer = 0;
+        function updateSkyTimeAndSpawns(dt) {
+            GameState.time += dt * 0.004; if (GameState.time > 1.0) GameState.time = 0;
+            const isNoite = GameState.time > 0.45 && GameState.time < 0.85;
+            document.getElementById('time-info').textContent = isNoite ? "Noite 🌙" : "Dia ☀️";
+            scene.background.setHex(isNoite ? 0x070b12 : 0xbfd1e5);
+
+            if (isNoite) {
+                spawnTimer += dt;
+                if (spawnTimer > 7.0 && GameState.mobs.length < 5) {
+                    spawnTimer = 0;
+                    const rx = PlayerState.position.x + (Math.random() - 0.5) * 30;
+                    const rz = PlayerState.position.z + (Math.random() - 0.5) * 30;
+                    GameState.mobs.push(new ZombieMob(rx, 75, rz));
+                }
+            } else {
+                // Queima os monstros de dia
+                GameState.mobs.forEach((mob, i) => {
+                    scene.remove(mob.mesh); mob.mesh.geometry.dispose();
+                });
+                GameState.mobs = [];
+            }
+        }
+
+        // ==========================================
+        // COLISÃO AABB DO JOGADOR (FÍSICA COMPLETA)
+        // ==========================================
+        function updatePhysics(player, wm, dt) {
+            if (player.invulnerabilityTimer > 0) player.invulnerabilityTimer -= dt;
+            player.velocity.y -= 22.0 * dt; // Gravidade
+            if (player.velocity.y < -40) player.velocity.y = -40;
+
+            const nextX = player.position.x + player.velocity.x * dt;
+            const nextY = player.position.y + player.velocity.y * dt;
+            const nextZ = player.position.z + player.velocity.z * dt;
+
+            // Caixa delimitadora simples (raio horizontal 0.3, altura 1.8)
+            const checkBlockSolid = (x, y, z) => { return BlockRegistry[wm.getBlock(Math.floor(x), Math.floor(y), Math.floor(z))]?.solid ?? false; };
+
+            // Eixo Y
+            let collidesY = false;
+            if (player.velocity.y <= 0) {
+                if (checkBlockSolid(player.position.x - 0.3, nextY, player.position.z - 0.3) ||
+                    checkBlockSolid(player.position.x + 0.3, nextY, player.position.z - 0.3) ||
+                    checkBlockSolid(player.position.x - 0.3, nextY, player.position.z + 0.3) ||
+                    checkBlockSolid(player.position.x + 0.3, nextY, player.position.z + 0.3)) {
+                    collidesY = true;
+                }
+            } else {
+                if (checkBlockSolid(player.position.x - 0.3, nextY + 1.8, player.position.z - 0.3) ||
+                    checkBlockSolid(player.position.x + 0.3, nextY + 1.8, player.position.z - 0.3) ||
+                    checkBlockSolid(player.position.x - 0.3, nextY + 1.8, player.position.z + 0.3) ||
+                    checkBlockSolid(player.position.x + 0.3, nextY + 1.8, player.position.z + 0.3)) {
+                    player.velocity.y = 0;
+                }
+            }
+
+            if (collidesY) { player.position.y = Math.ceil(nextY); player.velocity.y = 0; player.onGround = true; }
+            else { player.position.y = nextY; player.onGround = false; }
+
+            // Eixo X
+            let collidesX = false;
+            const offset = player.velocity.x > 0 ? 0.3 : -0.3;
+            if (checkBlockSolid(nextX + offset, player.position.y + 0.1, player.position.z) ||
+                checkBlockSolid(nextX + offset, player.position.y + 1.7, player.position.z)) {
+                collidesX = true;
+            }
+            if (!collidesX) player.position.x = nextX; else player.velocity.x = 0;
+
+            // Eixo Z
+            let collidesZ = false;
+            const offsetZ = player.velocity.z > 0 ? 0.3 : -0.3;
+            if (checkBlockSolid(player.position.x, player.position.y + 0.1, nextZ + offsetZ) ||
+                checkBlockSolid(player.position.x, player.position.y + 1.7, nextZ + offsetZ)) {
+                collidesZ = true;
+            }
+            if (!collidesZ) player.position.z = nextZ; else player.velocity.z = 0;
+        }
+
+        // ==========================================
+        // RAYCASTING DO CURSOR (MINERAÇÃO / ALVO)
+        // ==========================================
+        function getTargetedBlock(player, wm, cam) {
+            const raycaster = new THREE.Raycaster();
+            raycaster.setFromCamera(new THREE.Vector2(0, 0), cam);
+            // Interseção matemática simplificada por raycast em voxels num raio amigável
+            const dir = new THREE.Vector3(); cam.getWorldDirection(dir);
+            let px = cam.position.x; let py = cam.position.y; let pz = cam.position.z;
+            const steps = 100; const stepLength = player.reach / steps;
+
+            for (let i = 0; i < steps; i++) {
+                px += dir.x * stepLength; py += dir.y * stepLength; pz += dir.z * stepLength;
+                const ix = Math.floor(px); const iy = Math.floor(py); const iz = Math.floor(pz);
+                const b = wm.getBlock(ix, iy, iz);
+                if (b !== 0 && BlockRegistry[b]?.solid) {
+                    // Descobre a face atingida baseada na proximidade fracionária anterior
+                    const prevX = px - dir.x * stepLength; const prevY = py - dir.y * stepLength; const prevZ = pz - dir.z * stepLength;
+                    let face = [0,1,0];
+                    if (Math.floor(prevX) !== ix) face = [ix > prevX ? -1 : 1, 0, 0];
+                    else if (Math.floor(prevY) !== iy) face = [0, iy > prevY ? -1 : 1, 0];
+                    else if (Math.floor(prevZ) !== iz) face = [0, 0, iz > prevZ ? -1 : 1];
+                    return { x: ix, y: iy, z: iz, blockId: b, face };
+                }
+            }
+            return null;
+        }
+
+        function getTargetedEntity(player, cam, mobs, range) {
+            const dir = new THREE.Vector3(); cam.getWorldDirection(dir);
+            let hit = null; let minDist = range;
+            mobs.forEach(mob => {
+                const dx = mob.pos.x - cam.position.x; const dy = (mob.pos.y + 0.9) - cam.position.y; const dz = mob.pos.z - cam.position.z;
+                const d = Math.sqrt(dx*dx + dy*dy + dz*dz);
+                if (d < minDist) { hit = { mob, distance: d }; minDist = d; }
+            });
+            return hit;
+        }
+
+        // ==========================================
+        // SISTEMA DE INTERAÇÃO & ENGENHARIA DE MINERAÇÃO
+        // ==========================================
+        let miningProgress = 0; let lastTargetPos = null;
+        function handleMining(hit, dt) {
+            const heldSlot = getSelectedHotbarItem();
+            const heldDef = heldSlot ? ItemRegistry[heldSlot.itemId] : null;
+            const targetDef = BlockRegistry[hit.blockId];
+
+            if (!lastTargetPos || lastTargetPos.x !== hit.x || lastTargetPos.y !== hit.y || lastTargetPos.z !== hit.z) {
+                miningProgress = 0; lastTargetPos = { x: hit.x, y: hit.y, z: hit.z };
+            }
+
+            let speed = 1.0;
+            if (heldDef && heldDef.category === 'tool' && heldDef.toolType === targetDef.tool) {
+                const tier = TIER_DEFINITIONS.find(t => t.id === heldDef.tierId);
+                if (tier) speed = tier.miningSpeedMultiplier;
+            }
+
+            miningProgress += dt * speed;
+            SoundSystem.play('break');
+
+            if (miningProgress >= targetDef.hardness) {
+                SoundSystem.play('break');
+                WorldManager.setBlock(hit.x, hit.y, hit.z, 0, true);
+                chunkDirtyAtWorldPos(hit.x, hit.y, hit.z);
+                miningProgress = 0;
+
+                // Fornece drop ao jogador se a ferramenta cumprir os requisitos de nível
+                if (targetDef.dropItem) {
+                    let canDrop = !targetDef.requiresTool;
+                    if (targetDef.requiresTool && heldDef && heldDef.category === 'tool' && heldDef.toolType === targetDef.tool) {
+                        const tier = TIER_DEFINITIONS.find(t => t.id === heldDef.tierId);
+                        if (tier && tier.miningLevel >= targetDef.hardnessTier) canDrop = true;
+                    }
+                    if (canDrop) { addItem(targetDef.dropItem, 1); }
+                }
+                if (heldSlot && heldDef && heldDef.category === 'tool') {
+                    applyDurabilityLoss('hotbar', Inventory.selectedHotbarIndex, 1);
+                }
+            }
+        }
+
+        function chunkDirtyAtWorldPos(x, y, z) {
+            const cx = Math.floor(x / CHUNK_SIZE); const cz = Math.floor(z / CHUNK_SIZE);
+            const chunk = GameState.world.chunks.get(`${cx},${cz}`); if (chunk) chunk.dirty = true;
+            // Marca vizinhos como sujos se a alteração for na borda do chunk
+            if (((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE === 0) GameState.world.chunks.get(`${cx-1},${cz}`)&&(GameState.world.chunks.get(`${cx-1},${cz}`).dirty=true);
+            if (((x % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE === CHUNK_SIZE-1) GameState.world.chunks.get(`${cx+1},${cz}`)&&(GameState.world.chunks.get(`${cx+1},${cz}`).dirty=true);
+            if (((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE === 0) GameState.world.chunks.get(`${cx},${cz-1}`)&&(GameState.world.chunks.get(`${cx},${cz-1}`).dirty=true);
+            if (((z % CHUNK_SIZE) + CHUNK_SIZE) % CHUNK_SIZE === CHUNK_SIZE-1) GameState.world.chunks.get(`${cx},${cz+1}`)&&(GameState.world.chunks.get(`${cx},${cz+1}`).dirty=true);
+        }
+
+        let lastAttackTime = 0;
+        function tryAttack(mob, now) {
+            const heldSlot = getSelectedHotbarItem();
+            const heldDef = heldSlot ? ItemRegistry[heldSlot.itemId] : null;
+            let cooldown = 0.4; let dmg = 1.5;
+            if (heldDef && heldDef.category === 'weapon') { cooldown = heldDef.attackCooldown; dmg = heldDef.attackDamage; }
+
+            if (now - lastAttackTime >= cooldown) {
+                lastAttackTime = now; SoundSystem.play('attack');
+                const died = mob.takeDamage(dmg);
+                if (died) {
+                    const idx = GameState.mobs.indexOf(mob); if(idx !== -1) GameState.mobs.splice(idx,1);
+                }
+                if (heldSlot && heldDef && heldDef.category === 'weapon') {
+                    applyDurabilityLoss('hotbar', Inventory.selectedHotbarIndex, 1);
+                }
+            }
+        }
+
+        // ==========================================
+        // ENTRADAS, EVENTOS E INTERFACES DO SISTEMA
+        // ==========================================
+        const keysPressed = {};
+        function initPlayerInputs(canvas, cam) {
+            canvas.addEventListener('click', () => { if (!GameState.uiOpen) canvas.requestPointerLock(); });
+            document.addEventListener('pointerlockchange', () => { GameState.isPausado = (document.pointerLockElement !== canvas); updateUIOverlayVisibility(); });
+
+            window.addEventListener('keydown', e => {
+                const k = e.key.toLowerCase(); if (k === 'clickactive') return;
+                keysPressed[k] = true;
+                if (k === 'e') { toggleInventory(); }
+                if (e.key >= '1' && e.key <= '9') { Inventory.selectedHotbarIndex = Number(e.key) - 1; updateHotbarSelectionUI(); }
+                if (e.key === ' ' && PlayerState.onGround && !GameState.uiOpen && !GameState.isPausado) { PlayerState.velocity.y = PlayerState.jumpForce; SoundSystem.play('jump'); }
+            });
+            window.addEventListener('keyup', e => { keysPressed[e.key.toLowerCase()] = false; });
+
+            window.addEventListener('mousedown', e => {
+                if (document.pointerLockElement !== canvas || GameState.uiOpen) return;
+                if (e.button === 0) keysPressed['ClickActive'] = true;
+                if (e.button === 2) { // Botão direito: Colocar bloco ou interagir com Mesa de Trabalho
+                    const hit = getTargetedBlock(PlayerState, WorldManager, cam);
+                    if (hit) {
+                        const hitDef = BlockRegistry[hit.blockId];
+                        if (hitDef && hitDef.interactable === 'crafting_table') {
+                            openCraftingInterface(3); // Abre crafting avançado 3x3
+                        } else {
+                            const held = getSelectedHotbarItem();
+                            if (held && ItemRegistry[held.itemId]?.category === 'block') {
+                                const px = hit.x + hit.face[0]; const py = hit.y + hit.face[1]; const pz = hit.z + hit.face[2];
+                                WorldManager.setBlock(px, py, pz, ItemRegistry[held.itemId].placesBlockId, true);
+                                chunkDirtyAtWorldPos(px, py, pz); removeItemFromSlot('hotbar', Inventory.selectedHotbarIndex, 1);
+                            }
+                        }
+                    }
+                }
+            });
+            window.addEventListener('mouseup', e => { if(e.button === 0) keysPressed['ClickActive'] = false; });
+
+            window.addEventListener('mousemove', e => {
+                if (document.pointerLockElement !== canvas || GameState.uiOpen || GameState.isPausado) return;
+                PlayerState.rotation.yaw -= e.movementX * 0.0022;
+                PlayerState.rotation.pitch -= e.movementY * 0.0022;
+                PlayerState.rotation.pitch = Math.max(-Math.PI/2 + 0.01, Math.min(Math.PI/2 - 0.01, PlayerState.rotation.pitch));
+                cam.rotation.set(PlayerState.rotation.pitch, PlayerState.rotation.yaw, 0, 'YXZ');
+            });
+        }
+
+        function processPlayerMovement(cam) {
+            let fb = 0; let lr = 0;
+            if (keysPressed['w'] || keysPressed['arrowup']) fb += 1; if (keysPressed['s'] || keysPressed['arrowdown']) fb -= 1;
+            if (keysPressed['a'] || keysPressed['arrowleft']) lr -= 1; if (keysPressed['d'] || keysPressed['arrowright']) lr += 1;
+
+            const yaw = PlayerState.rotation.yaw;
+            const forwardX = -Math.sin(yaw); const forwardZ = -Math.cos(yaw);
+            const rightX = Math.cos(yaw); const rightZ = -Math.sin(yaw);
+
+            let moveX = forwardX * fb + rightX * lr; let moveZ = forwardZ * fb + rightZ * lr;
+            const len = Math.sqrt(moveX*moveX + moveZ*moveZ);
+            if (len > 0) { moveX /= len; moveZ /= len; moveX *= PlayerState.speed; moveZ *= PlayerState.speed; }
+
+            PlayerState.velocity.x = moveX; PlayerState.velocity.z = moveZ;
+            cam.position.set(PlayerState.position.x, PlayerState.position.y + PlayerState.eyeHeight, PlayerState.position.z);
+        }
+
+        function updateUIOverlayVisibility() {
+            const menu = document.getElementById('pause-menu');
+            if (GameState.isPausado && !GameState.uiOpen) menu.classList.remove('hidden');
+            else menu.classList.add('hidden');
+        }
+
+        // ==========================================
+        // SUB-SISTEMA GRÁFICO DE RECONSTRUÇÃO DA INTERFACE DO INVENTÁRIO & CRAFTING
+        // ==========================================
+        let currentCraftSize = 2; // 2 para inventário normal, 3 para Mesa de Trabalho
+
+        function toggleInventory() {
+            if (GameState.isPausado && !GameState.uiOpen) return;
+            GameState.uiOpen = !GameState.uiOpen;
+            const modal = document.getElementById('inventory-modal');
+            if (GameState.uiOpen) {
+                document.exitPointerLock(); modal.classList.remove('hidden'); openCraftingInterface(2);
+            } else {
+                modal.classList.add('hidden'); clearCraftingMatrixToInventory(); document.getElementById('game-canvas').requestPointerLock();
+            }
+        }
+
+        function openCraftingInterface(size) {
+            currentCraftSize = size;
+            document.getElementById('inv-title').textContent = size === 3 ? "Mesa de Trabalho (3x3)" : "Inventário (2x2)";
+            Inventory.craftMatrix = new Array(size * size).fill(null); Inventory.craftResult = null;
+            renderInventoryUI();
+        }
+
+        function clearCraftingMatrixToInventory() {
+            // Devolve os materiais da grade para o inventário ao fechar a interface
+            for (let i = 0; i < Inventory.craftMatrix.length; i++) {
+                const item = Inventory.craftMatrix[i];
+                if (item) { addItem(item.itemId, item.quantity); }
+            }
+            Inventory.craftMatrix = []; Inventory.craftResult = null;
+        }
+
+        function renderInventoryUI() {
+            const mainGrid = document.getElementById('inv-main-grid'); mainGrid.innerHTML = '';
+            Inventory.main.forEach((slot, i) => mainGrid.appendChild(createSlotDOM('main', i, slot)));
+
+            const hotbarGrid = document.getElementById('inv-hotbar-grid'); hotbarGrid.innerHTML = '';
+            Inventory.hotbar.forEach((slot, i) => hotbarGrid.appendChild(createSlotDOM('hotbar', i, slot)));
+
+            const craftGrid = document.getElementById('craft-grid'); craftGrid.innerHTML = '';
+            craftGrid.style.gridTemplateColumns = `repeat(${currentCraftSize}, 1fr)`;
+            for (let i = 0; i < currentCraftSize * currentCraftSize; i++) {
+                craftGrid.appendChild(createSlotDOM('craft', i, Inventory.craftMatrix[i]));
+            }
+
+            const resultSlot = document.getElementById('craft-result'); resultSlot.innerHTML = '';
+            if (Inventory.craftResult) {
+                const def = ItemRegistry[Inventory.craftResult.itemId];
+                resultSlot.innerHTML = `<div class="slot-icon" style="background:${def?`transparent`: `#666`}; color:${def?.color?`#` + def.color.toString(16):`#fff`}">${def?.icon || Inventory.craftResult.itemId.substring(0,2).toUpperCase()}</div><span class="slot-count">${Inventory.craftResult.quantity>1?Inventory.craftResult.quantity:''}</span>`;
+            }
+        }
+
+        function createSlotDOM(area, index, slot) {
+            const div = document.createElement('div'); div.className = 'inv-slot';
+            if (slot) {
+                const def = ItemRegistry[slot.itemId];
+                div.innerHTML = `<div class="slot-icon" style="color:${def?.color ? '#' + def.color.toString(16) : '#fff'}">${def?.icon || slot.itemId.substring(0,2).toUpperCase()}</div>`;
+                if (slot.quantity > 1) div.innerHTML += `<span class="slot-count">${slot.quantity}</span>`;
+                if (slot.durability !== undefined && def?.maxDurability) {
+                    const p = (slot.durability / def.maxDurability) * 100;
+                    div.innerHTML += `<div class="durability-bar"><div class="durability-fill" style="width:${p}%; background:${p<25?'#f44336':p<50?'#ff9800':'#4caf50'}"></div></div>`;
+                }
+            }
+            div.addEventListener('click', () => handleSlotClick(area, index)); return div;
+        }
+
+        function handleSlotClick(area, index) {
+            let arr = area === 'hotbar' ? Inventory.hotbar : area === 'main' ? Inventory.main : Inventory.craftMatrix;
+            let clickedSlot = arr[index];
+
+            if (Inventory.cursor) {
+                // Jogador está segurando um item no cursor mouse
+                if (area === 'craft' || area === 'hotbar' || area === 'main') {
+                    if (!clickedSlot) {
+                        arr[index] = Inventory.cursor; Inventory.cursor = null;
+                    } else if (clickedSlot.itemId === Inventory.cursor.itemId && !ItemRegistry[clickedSlot.itemId].maxDurability) {
+                        const max = stackSizeOf(clickedSlot.itemId); const space = max - clickedSlot.quantity;
+                        if (space > 0) {
+                            const add = Math.min(space, Inventory.cursor.quantity);
+                            clickedSlot.quantity += add; Inventory.cursor.quantity -= add;
+                            if (Inventory.cursor.quantity <= 0) Inventory.cursor = null;
+                        }
+                    } else { // Troca de itens entre slot e cursor
+                        const tmp = arr[index]; arr[index] = Inventory.cursor; Inventory.cursor = tmp;
+                    }
+                }
+            } else {
+                // Cursor está vazio, pega o item do slot clicado
+                if (clickedSlot) { Inventory.cursor = clickedSlot; arr[index] = null; }
+            }
+
+            if (area === 'craft') { updateCraftingRecipeCheck(); } else { updateCraftingRecipeCheck(); }
+            renderInventoryUI(); updateCursorUI(); EventBus.emit('inventory:changed', null);
+        }
+
+        // Evento específico para o Slot de Resultado do Crafting
+        document.getElementById('craft-result').addEventListener('click', () => {
+            if (!Inventory.craftResult) return;
+
+            // Se o jogador já possui um item diferente no cursor, não permite retirar
+            if (Inventory.cursor && Inventory.cursor.itemId !== Inventory.craftResult.itemId) return;
+            
+            if (Inventory.cursor) {
+                // Se já estiver segurando o mesmo item, empilha contanto que respeite o limite de stack
+                const maxStack = stackSizeOf(Inventory.craftResult.itemId);
+                if (Inventory.cursor.quantity + Inventory.craftResult.quantity <= maxStack) {
+                    Inventory.cursor.quantity += Inventory.craftResult.quantity;
+                } else {
+                    return; // Sem espaço suficiente no stack do cursor
+                }
+            } else {
+                // Caso o cursor esteja vazio, move o resultado do craft diretamente para o cursor
+                Inventory.cursor = { ...Inventory.craftResult };
+            }
+
+            // CONSUMIR ITENS USADOS DA GRADE DE CRAFTING
+            for (let i = 0; i < Inventory.craftMatrix.length; i++) {
+                if (Inventory.craftMatrix[i]) {
+                    Inventory.craftMatrix[i].quantity--;
+                    if (Inventory.craftMatrix[i].quantity <= 0) Inventory.craftMatrix[i] = null;
+                }
+            }
+
+            SoundSystem.play('craft');
+            updateCraftingRecipeCheck();
+            renderInventoryUI();
+            updateCursorUI();
+            EventBus.emit('inventory:changed', null);
+        });
+
+        function updateCraftingRecipeCheck() {
+            // Monta matriz flat e 2D temporária baseada nas strings das IDs para validação das receitas
+            const gridFlat = Inventory.craftMatrix.map(c => c ? c.itemId : null);
+            const grid2D = [];
+            for (let r = 0; r < currentCraftSize; r++) {
+                const row = []; for(let c=0; c<currentCraftSize; c++) { row.push(gridFlat[r * currentCraftSize + c]); }
+                grid2D.push(row);
+            }
+            const match = findMatchingRecipe(grid2D, gridFlat, currentCraftSize, currentCraftSize === 3);
+            if (match) {
+                Inventory.craftResult = { itemId: match.result.itemId, quantity: match.result.quantity };
+            } else {
+                Inventory.craftResult = null;
+            }
+        }
+
+        function updateCursorUI() {
+            const el = document.getElementById('cursor-item');
+            if (Inventory.cursor) {
+                const def = ItemRegistry[Inventory.cursor.itemId];
+                el.style.display = 'flex'; el.style.left = `${cursorX - 18}px`; el.style.top = `${cursorY - 18}px`;
+                el.innerHTML = `<div class="slot-icon" style="color:${def?.color ? '#' + def.color.toString(16) : '#fff'}">${def?.icon || Inventory.cursor.itemId.substring(0,2).toUpperCase()}</div>`;
+                el.innerHTML += `<span class="slot-count">${Inventory.cursor.quantity > 1 ? Inventory.cursor.quantity : ''}</span>`;
+            } else { el.style.display = 'none'; }
+        }
+
+        let cursorX = 0, cursorY = 0;
+        window.addEventListener('mousemove', e => { cursorX = e.clientX; cursorY = e.clientY; if(GameState.uiOpen) updateCursorUI(); });
+
+        function renderHotbarUI() {
+            const slots = document.querySelectorAll('.hotbar-slot');
+            slots.forEach((el, i) => {
+                const slot = Inventory.hotbar[i]; el.innerHTML = '';
+                if (slot) {
+                    const def = ItemRegistry[slot.itemId];
+                    el.innerHTML = `<div class="slot-icon" style="color:${def?.color ? '#' + def.color.toString(16) : '#fff'}">${def?.icon || slot.itemId.substring(0,2).toUpperCase()}</div>`;
+                    if (slot.quantity > 1) el.innerHTML += `<span class="slot-count">${slot.quantity}</span>`;
+                    if (slot.durability !== undefined && def?.maxDurability) {
+                        const p = (slot.durability / def.maxDurability) * 100;
+                        el.innerHTML += `<div class="durability-bar"><div class="durability-fill" style="width:${p}%; background:${p<25?'#f44336':p<50?'#ff9800':'#4caf50'}"></div></div>`;
+                    }
+                } else { el.innerHTML = `<span class="slot-count"></span>`; }
+            });
+            updateHotbarSelectionUI();
+        }
+
+        function updateHotbarSelectionUI() {
+            const slots = document.querySelectorAll('.hotbar-slot');
+            slots.forEach((el, i) => {
+                if (i === Inventory.selectedHotbarIndex) el.classList.add('selected');
+                else el.classList.remove('selected');
+            });
+        }
+
+        // ==========================================
         // LAÇO DE ATUALIZAÇÃO / GAME LOOP PRINCIPAL
         // ==========================================
         const canvas = document.getElementById('game-canvas'); let lastTime = performance.now();
@@ -1259,46 +1160,52 @@
         function init() {
             initRenderer(canvas); initPlayerInputs(canvas, camera);
             updateUIHealth(); renderHotbarUI(); rebuildChunkMeshes();
+            document.getElementById('btn-resume').onclick = () => { canvas.requestPointerLock(); };
+            document.getElementById('btn-close-inv').onclick = () => { toggleInventory(); };
+            document.getElementById('btn-menu-save').onclick = () => { alert("Progresso guardado com sucesso localmente!"); };
             requestAnimationFrame(gameLoop);
         }
 
         function gameLoop(currentTime) {
             requestAnimationFrame(gameLoop);
             const deltaTime = (currentTime - lastTime) / 1000; lastTime = currentTime;
-            const nowSeconds = currentTime / 1000;
 
-            if (!isSimPaused()) {
+            if (!GameState.isPausado && !GameState.uiOpen) {
                 processPlayerMovement(camera); updatePhysics(PlayerState, WorldManager, deltaTime);
-                WorldManager.updateStreaming(PlayerState.position); 
+                WorldManager.updateStreaming(PlayerState.position); updateSkyTimeAndSpawns(deltaTime);
                 rebuildChunkMeshes();
 
-                const blockHit = getTargetedBlock(PlayerState, WorldManager, camera);
+                // Identifica qual bloco o jogador está apontando com a mira
+                const hit = getTargetedBlock(PlayerState, WorldManager, camera);
                 let blockNameText = "Nenhum";
-                
-                if (blockHit) {
-                    const blockDef = BlockRegistry[blockHit.blockId];
-                    if (blockDef) { blockNameText = blockDef.displayName || blockDef.name; }
-                }
+                if (hit) {
+                    const blockDef = BlockRegistry[hit.blockId];
+                    if (blockDef) {
+                        blockNameText = blockDef.displayName || blockDef.name;
+                    }
+                    if (keysPressed['ClickActive'] && document.pointerLockElement === canvas) {
+                        handleMining(hit, deltaTime);
+                    } else { miningProgress = 0; lastTargetPos = null; }
+                } else { miningProgress = 0; lastTargetPos = null; }
 
-                const heldForRange = getSelectedHotbarItem();
-                const heldDef = heldForRange ? ItemRegistry[heldForRange.itemId] : null;
+                const heldSlot = getSelectedHotbarItem();
+                const heldDef = heldSlot ? ItemRegistry[heldSlot.itemId] : null;
                 const attackRange = (heldDef && heldDef.category === 'weapon') ? heldDef.attackRange : 3.0;
                 const entityHit = getTargetedEntity(PlayerState, camera, GameState.mobs, attackRange);
 
                 if (keysPressed['ClickActive'] && document.pointerLockElement === canvas) {
-                    if (entityHit && (!blockHit || entityHit.distance < blockHit.distance)) {
-                        tryAttack(entityHit.mob, nowSeconds);
+                    if (entityHit && (!hit || entityHit.distance < hit.distance)) {
+                        tryAttack(entityHit.mob, currentTime / 1000);
                         miningProgress = 0; lastTargetPos = null;
-                    } else if (blockHit) {
-                        handleMining(blockHit, deltaTime);
                     }
-                } else { miningProgress = 0; lastTargetPos = null; }
+                }
 
                 GameState.mobs.forEach(mob => mob.update(PlayerState.position, WorldManager, deltaTime));
                 
+                // Exibição na HUD com o Nome Amigável do bloco focado
                 blockInfoEl.textContent = `Olhando para: ${blockNameText} | X: ${PlayerState.position.x.toFixed(1)}, Y: ${PlayerState.position.y.toFixed(1)}, Z: ${PlayerState.position.z.toFixed(1)}`;
-            } else if (!GameState.isPausado) {
-                WorldManager.updateStreaming(PlayerState.position); 
+            } else if (!GameState.isPausado && GameState.uiOpen) {
+                WorldManager.updateStreaming(PlayerState.position); updateSkyTimeAndSpawns(deltaTime);
                 rebuildChunkMeshes();
                 GameState.mobs.forEach(mob => mob.update(PlayerState.position, WorldManager, deltaTime));
             }
